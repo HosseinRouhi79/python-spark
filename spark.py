@@ -1,4 +1,6 @@
 from pyspark.sql import SparkSession
+from pyspark.sql.functions import col
+from pyspark.sql.functions import explode, split
 from flask import Flask
 # import os
 # os.environ['PYSPARK_SUBMIT_ARGS'] = '--packages o.apache.spark:spark-streaming-kafka-0-10_2.12:3.5.0,org.apache.spark:spark-sql-kafka-0-10_2.12:3.5.1 pyspark-shell'
@@ -16,7 +18,7 @@ def do_spark():
     .getOrCreate()
     spark.conf.set("spark.sql.shuffle.partitions", 1)
 
-    bootstrap_servers = "kafka1:39092"  # Replace with your Kafka broker addresses
+    bootstrap_servers = "172.18.0.4:39092"  # Replace with your Kafka broker addresses
     topic = "logtopic"  # Replace with your topic name
 
     df = spark \
@@ -29,9 +31,12 @@ def do_spark():
 
     # Cast key and value to strings and print to console
     deserialized_df = df.selectExpr("CAST(value AS STRING)")
+    lines_df = deserialized_df.select(explode(split(deserialized_df.value, "\n")).alias("line"))
+
+    filtered_df = lines_df.filter(col("line").like("%session opened%"))
 
     # Start the streaming query and await its termination
-    query = deserialized_df\
+    query = filtered_df\
     .writeStream \
     .outputMode("append") \
     .format("text") \
